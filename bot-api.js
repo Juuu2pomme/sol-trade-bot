@@ -554,34 +554,51 @@ class TradingBot {
   // HELPERS
   // ═══════════════════════════════════════════════════════
 
-  async getTokenBalance(mint, retries = 3) {
-    // Retry logic comme YZYLAB
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        const accounts = await this.connection.getParsedTokenAccountsByOwner(
-          this.keypair.publicKey,
-          { mint: new PublicKey(mint) }
+async getTokenBalance(mint, retries = 5) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const tokenAccounts = await this.connection.getTokenAccountsByOwner(
+        this.keypair.publicKey,
+        { mint: new PublicKey(mint) },
+        { commitment: 'confirmed' }
+      );
+      
+      if (tokenAccounts.value.length > 0) {
+        const accountInfo = await this.connection.getTokenAccountBalance(
+          tokenAccounts.value[0].pubkey,
+          'confirmed'
         );
         
-        if (accounts.value.length > 0) {
-          const balance = accounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
-          if (balance && balance > 0) {
-            return balance;
-          }
-        }
-        
-        if (attempt < retries) {
-          await this.sleep(2000 * (attempt + 1)); // Backoff exponentiel
-        }
-      } catch (error) {
-        logger.error(`Attempt ${attempt + 1} failed to get balance: ${error.message}`);
-        if (attempt < retries) {
-          await this.sleep(2000 * (attempt + 1));
+        const balance = accountInfo.value.uiAmount;
+        if (balance && balance > 0) {
+          logger.info(`✅ Balance verified: ${balance.toFixed(2)} tokens`);
+          return balance;
         }
       }
+      
+      if (attempt < retries) {
+        const waitTime = 3000 * (attempt + 1);
+        logger.warn(`⏳ Attempt ${attempt + 1}/${retries} - No balance yet, waiting ${waitTime}ms...`);
+        await this.sleep(waitTime);
+      }
+      
+    } catch (error) {
+      logger.error(`Attempt ${attempt + 1}/${retries} failed: ${error.message}`);
+      
+      if (error.message.includes('JSON') || error.message.includes('parse')) {
+        logger.warn(`JSON parsing error detected, will retry...`);
+      }
+      
+      if (attempt < retries) {
+        await this.sleep(3000 * (attempt + 1));
+      } else {
+        throw new Error(`Failed to verify balance after ${retries} attempts`);
+      }
     }
-    return null;
   }
+  
+  return null;
+}
 
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
