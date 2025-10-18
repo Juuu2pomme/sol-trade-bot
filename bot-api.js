@@ -755,7 +755,7 @@ app.get("/", (req, res) => {
 // START SERVER
 // ═══════════════════════════════════════════════════════
 
-app.listen(PORT, '127.0.0.1', () => {
+app.listen(PORT, '0.0.0.0', () => {
   logger.info(`🚀 Trading Bot API running on http://127.0.0.1:${PORT}`);
   logger.info(`📊 Dashboard: http://127.0.0.1:${PORT}`);
 });
