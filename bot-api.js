@@ -415,10 +415,19 @@ class TradingBot {
       return { shouldExit: true, reason: `Hard stop (${pnlPercentage.toFixed(2)}%)` };
     }
     
-    // 2. TRAILING STOP
-    const trailingStop = this.getTrailingStop(pnlPercentage);
-    if (trailingStop !== null && pnlPercentage <= trailingStop) {
-      return { shouldExit: true, reason: `Trailing stop (${pnlPercentage.toFixed(2)}% ≤ ${trailingStop}%)` };
+    // 2. TRAILING STOP (depuis l'ATH)
+    const activeTrailing = this.getActiveTrailingStop(history.ath, position.entryPrice);
+    if (activeTrailing !== null) {
+      const athPnL = ((history.ath - position.entryPrice) / position.entryPrice) * 100;
+      const currentPnL = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
+      
+      // Vérifier si on est descendu sous le seuil du trailing stop
+      if (currentPnL <= activeTrailing.stop) {
+        return { 
+          shouldExit: true, 
+          reason: `Trailing stop (ATH: +${athPnL.toFixed(2)}%, seuil: +${activeTrailing.stop}%, actuel: +${currentPnL.toFixed(2)}%)` 
+        };
+      }
     }
     
     // 3. EARLY EXIT (15 min check)
@@ -478,13 +487,19 @@ class TradingBot {
     return { shouldExit: false };
   }
 
-  getTrailingStop(pnlPercentage) {
+  getActiveTrailingStop(athPrice, entryPrice) {
+    // Calculer le PnL de l'ATH par rapport à l'entry
+    const athPnL = ((athPrice - entryPrice) / entryPrice) * 100;
+    
+    // Trouver le niveau de trailing stop actif (celui avec le threshold le plus élevé dépassé)
     for (let i = this.config.trailingStops.length - 1; i >= 0; i--) {
       const { threshold, stop } = this.config.trailingStops[i];
-      if (pnlPercentage >= threshold) {
-        return stop;
+      if (athPnL >= threshold) {
+        return { threshold, stop };
       }
     }
+    
+    // Aucun trailing stop actif
     return null;
   }
 
